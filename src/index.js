@@ -1,14 +1,38 @@
-const express = require('express');
+const mongoose = require('mongoose');
+const app = require('./app');
+const config = require('./config/config');
+const logger = require('./config/logger');
 
-const app = express();
-const port = 5000;
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+let server;
+mongoose.connect(config.mongoose.url, config.mongoose.options).then(() => {
+    logger.info('Connected to MongoDB');
+    server = app.listen(config.port, () => {
+        logger.info(`Listening to port ${config.port}`);
+    });
+});
 
-app.get('/', (req, res) => {
-    res.send('Hello World');
-})
+const exitHandler = () => {
+    if (server) {
+        server.close(() => {
+            logger.info('Server closed');
+            process.exit(1);
+        });
+    } else {
+        process.exit(1);
+    }
+};
 
-app.listen(port, () => {
-    console.log(`🔊  Server started at port ${port}`);
-})
+const unexpectedErrorHandler = (error) => {
+    logger.error(error);
+    exitHandler();
+};
+
+process.on('uncaughtException', unexpectedErrorHandler);
+process.on('unhandledRejection', unexpectedErrorHandler);
+
+process.on('SIGTERM', () => {
+    logger.info('SIGTERM received');
+    if (server) {
+        server.close();
+    }
+});
